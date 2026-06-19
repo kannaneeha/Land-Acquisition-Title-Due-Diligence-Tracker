@@ -1,14 +1,15 @@
 import { LockOutlined } from '@mui/icons-material';
-import { Alert, Avatar, Box, Button, Card, CardContent, Container, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Avatar, Box, Button, Card, CardContent, Container, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { roleLabels, ROLES } from '../utils/rbac.js';
 
 function Login() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [form, setForm] = useState({ username: '', password: '' });
+  const [form, setForm] = useState({ employeeId: '', role: ROLES.ADMIN, username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -45,11 +46,20 @@ function Login() {
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Box component="form" onSubmit={handleSubmit}>
               <Stack spacing={2}>
-                <TextField label="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} fullWidth required autoFocus />
+                <TextField label="Employee ID" value={form.employeeId} onChange={(event) => setForm({ ...form, employeeId: event.target.value.toUpperCase() })} fullWidth required autoFocus />
+                <TextField select label="Role" value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })} fullWidth required>
+                  {Object.values(ROLES).map((role) => (
+                    <MenuItem key={role} value={role}>{roleLabels[role]}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField label="Username" value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} fullWidth required />
                 <TextField label="Password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} fullWidth required />
                 <Button type="submit" size="large" variant="contained" disabled={loading}>
                   {loading ? 'Signing in...' : 'Login'}
                 </Button>
+                <Alert severity="info">
+                  Sample admin login: ADM001 / Administrator / admin / admin123. Accounts lock for 15 minutes after 5 failed attempts.
+                </Alert>
               </Stack>
             </Box>
           </CardContent>

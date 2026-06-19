@@ -30,6 +30,9 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { useAuth } from '../hooks/useAuth.jsx';
+import { ROLES } from '../utils/rbac.js';
+import { addActivityLog } from '../utils/activity.js';
 import { getStoredLandRecords, saveStoredLandRecords } from '../utils/storage.js';
 
 const columns = [
@@ -44,6 +47,7 @@ const columns = [
 
 function LandRecords() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [records, setRecords] = useState(getStoredLandRecords);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -88,16 +92,20 @@ function LandRecords() {
   const handleDelete = () => {
     const nextRecords = records.filter((record) => record.id !== deleteId);
     saveStoredLandRecords(nextRecords);
+    addActivityLog(user, `Record Deleted: ${deleteId}`);
     setRecords(nextRecords);
     setDeleteId(null);
   };
+
+  const canEditRecords = [ROLES.ADMIN, ROLES.OFFICER, ROLES.LEGAL].includes(user?.role);
+  const canDeleteRecords = user?.role === ROLES.ADMIN;
 
   return (
     <Box>
       <SectionHeader
         title="Land Records Management"
         subtitle="Search, filter, sort, view, edit, and delete due diligence records."
-        action={<Button startIcon={<Add />} variant="contained" onClick={() => navigate('/entry')}>Add Record</Button>}
+        action={user?.role !== ROLES.LEGAL && <Button startIcon={<Add />} variant="contained" onClick={() => navigate('/entry')}>Add Record</Button>}
       />
       <Card>
         <CardContent>
@@ -151,12 +159,16 @@ function LandRecords() {
                       <Tooltip title="View">
                         <IconButton onClick={() => setViewRecord(record)}><Visibility /></IconButton>
                       </Tooltip>
-                      <Tooltip title="Edit">
-                        <IconButton onClick={() => navigate(`/entry/${record.id}`)}><Edit /></IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton color="error" onClick={() => setDeleteId(record.id)}><Delete /></IconButton>
-                      </Tooltip>
+                      {canEditRecords && (
+                        <Tooltip title="Edit">
+                          <IconButton onClick={() => navigate(`/entry/${record.id}`)}><Edit /></IconButton>
+                        </Tooltip>
+                      )}
+                      {canDeleteRecords && (
+                        <Tooltip title="Delete">
+                          <IconButton color="error" onClick={() => setDeleteId(record.id)}><Delete /></IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

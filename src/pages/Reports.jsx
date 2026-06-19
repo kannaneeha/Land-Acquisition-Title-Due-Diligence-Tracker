@@ -4,6 +4,7 @@ import { BarChart, ChartCard, LineChart, PieChart } from '../components/Charts.j
 import KpiCard from '../components/KpiCard.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import { exportRecordsToExcel, exportReportToPdf } from '../utils/exportUtils.js';
+import { getActivityLog } from '../utils/activity.js';
 import { getStoredLandRecords } from '../utils/storage.js';
 
 function groupCount(records, key) {
@@ -15,9 +16,12 @@ function groupCount(records, key) {
 
 function Reports() {
   const records = getStoredLandRecords();
+  const activities = getActivityLog();
   const pendingCases = records.filter((record) => ['Pending', 'In Review', 'Blocked'].includes(record.legalClearanceStatus)).length;
   const acquired = records.filter((record) => record.workflowStage === 6).length;
   const totalArea = records.reduce((sum, record) => sum + Number(record.area), 0).toFixed(1);
+  const pendingVerification = records.filter((record) => record.titleStatus === 'Pending').length;
+  const encumbranceIssues = records.filter((record) => record.encumbranceStatus === 'Issue Found').length;
 
   const legalData = Object.entries(groupCount(records, 'legalClearanceStatus')).map(([label, value]) => ({ label, value }));
   const titleData = Object.entries(groupCount(records, 'titleStatus')).map(([label, value]) => ({ label, value }));
@@ -61,6 +65,18 @@ function Reports() {
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <KpiCard title="Legal Clearances" value={legalData.find((item) => item.label === 'Cleared')?.value || 0} helper="Cleared for closure" icon={<TableChart />} color="success.main" progress={70} />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <KpiCard title="Legal Clearance Summary" value={`${legalData.find((item) => item.label === 'Cleared')?.value || 0}/${records.length}`} helper="Audit-ready cleared cases" icon={<TableChart />} color="success.main" />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <KpiCard title="Encumbrance Summary" value={encumbranceIssues} helper="Open encumbrance exposures" icon={<Download />} color="error.main" />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <KpiCard title="Pending Verification Summary" value={pendingVerification} helper="Title checks outstanding" icon={<PictureAsPdf />} color="warning.main" />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <KpiCard title="User Activity Summary" value={activities.length} helper="Tracked audit events" icon={<TableChart />} />
         </Grid>
 
         <Grid item xs={12} lg={5}>

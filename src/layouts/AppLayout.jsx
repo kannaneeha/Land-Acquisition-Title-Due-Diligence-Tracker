@@ -3,15 +3,19 @@ import {
   AddLocationAlt,
   Analytics,
   AssignmentTurnedIn,
+  History,
   Dashboard,
   Description,
   Logout,
   Menu,
+  Notifications,
+  People,
   Settings,
 } from '@mui/icons-material';
 import {
   AppBar,
   Avatar,
+  Badge,
   Box,
   Divider,
   Drawer,
@@ -31,6 +35,8 @@ import { useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { canAccess } from '../utils/rbac.js';
+import { getStoredLandRecords } from '../utils/storage.js';
 
 const drawerWidth = 272;
 
@@ -41,6 +47,8 @@ const menuItems = [
   { label: 'Workflow Tracker', icon: <AssignmentTurnedIn />, path: '/workflow' },
   { label: 'Reports', icon: <Analytics />, path: '/reports' },
   { label: 'Settings', icon: <Settings />, path: '/settings' },
+  { label: 'User Management', icon: <People />, path: '/users' },
+  { label: 'Activity Log', icon: <History />, path: '/activity' },
 ];
 
 function AppLayout() {
@@ -48,9 +56,19 @@ function AppLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [notificationAnchor, setNotificationAnchor] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const visibleMenuItems = useMemo(() => menuItems.filter((item) => canAccess(user, item.path)), [user]);
+  const records = getStoredLandRecords();
+  const notifications = [
+    `${records.filter((record) => record.titleStatus === 'Pending').length} pending title verifications`,
+    `${records.filter((record) => record.legalClearanceStatus === 'Blocked').length} blocked legal cases`,
+    `${records.filter((record) => record.createdAt?.startsWith('2026-05')).length} new parcels added`,
+    `${records.filter((record) => record.legalClearanceStatus === 'In Review').length} legal reviews required`,
+  ];
 
   const pageTitle = useMemo(() => {
     return menuItems.find((item) => location.pathname.startsWith(item.path))?.label ?? 'Dashboard';
@@ -66,7 +84,7 @@ function AppLayout() {
       </Box>
       <Divider sx={{ borderColor: 'rgba(255,255,255,0.14)' }} />
       <List sx={{ px: 1.5, py: 2, flex: 1 }}>
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const selected = location.pathname.startsWith(item.path);
           return (
             <ListItemButton
@@ -91,7 +109,7 @@ function AppLayout() {
         })}
       </List>
       <Box sx={{ p: 2, color: 'rgba(255,255,255,0.72)' }}>
-        <Typography variant="caption">Base API: localhost:5000/api</Typography>
+        <Typography variant="caption">Signed in: {user?.roleLabel}</Typography>
       </Box>
     </Box>
   );
@@ -125,6 +143,13 @@ function AppLayout() {
             <Typography variant="h6" noWrap>{pageTitle}</Typography>
             <Typography variant="caption" color="text.secondary">Centralized acquisition, title verification, and legal clearance operations</Typography>
           </Box>
+          <Tooltip title="Notifications">
+            <IconButton onClick={(event) => setNotificationAnchor(event.currentTarget)} sx={{ mr: 1 }}>
+              <Badge badgeContent={notifications.filter((item) => !item.startsWith('0')).length} color="error">
+                <Notifications />
+              </Badge>
+            </IconButton>
+          </Tooltip>
           <Tooltip title="User profile">
             <IconButton onClick={(event) => setAnchorEl(event.currentTarget)}>
               <Avatar sx={{ bgcolor: 'primary.main', width: 36, height: 36 }}>
@@ -135,12 +160,21 @@ function AppLayout() {
           <MuiMenu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
             <MenuItem disabled>
               <AccountCircle sx={{ mr: 1 }} />
-              {user?.name}
+              <Box>
+                <Typography variant="body2" fontWeight={700}>{user?.username}</Typography>
+                <Typography variant="caption">{user?.employeeId} | {user?.roleLabel}</Typography>
+                <Typography variant="caption" display="block">Last login: {user?.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'First login'}</Typography>
+              </Box>
             </MenuItem>
             <MenuItem onClick={handleLogout}>
               <Logout sx={{ mr: 1 }} />
               Logout
             </MenuItem>
+          </MuiMenu>
+          <MuiMenu anchorEl={notificationAnchor} open={Boolean(notificationAnchor)} onClose={() => setNotificationAnchor(null)}>
+            {notifications.map((notification) => (
+              <MenuItem key={notification}>{notification}</MenuItem>
+            ))}
           </MuiMenu>
         </Toolbar>
       </AppBar>

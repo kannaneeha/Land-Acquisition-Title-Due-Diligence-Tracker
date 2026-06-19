@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState } from 'react';
+import { authService } from '../services/authService.js';
 
 const AuthContext = createContext(null);
 const AUTH_KEY = 'crownridge_auth_user';
@@ -9,16 +10,8 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = async ({ username, password }) => {
-    if (!username?.trim() || !password?.trim()) {
-      throw new Error('Username and password are required.');
-    }
-
-    const nextUser = {
-      name: username.trim(),
-      role: 'Due Diligence Manager',
-      organization: 'Crownridge LLP',
-    };
+  const login = async (credentials) => {
+    const nextUser = await authService.login(credentials);
     localStorage.setItem(AUTH_KEY, JSON.stringify(nextUser));
     setUser(nextUser);
     return nextUser;
@@ -26,6 +19,7 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem('crownridge_token');
     setUser(null);
   };
 

@@ -1,0 +1,1 @@
+import{ft as e,i as t,r as n}from"./CardContent-DaIy0M3N.js";var r=e();function i({title:e=`No records found`,message:i=`Try adjusting search or filter settings.`}){return(0,r.jsxs)(n,{sx:{py:7,px:2,textAlign:`center`},children:[(0,r.jsx)(t,{variant:`h6`,children:e}),(0,r.jsx)(t,{variant:`body2`,color:`text.secondary`,sx:{mt:.75},children:i})]})}export{i as t};
