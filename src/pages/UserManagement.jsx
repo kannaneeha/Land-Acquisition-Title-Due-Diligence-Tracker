@@ -21,13 +21,13 @@ import {
   TextField,
   Tooltip,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import LoadingState from '../components/LoadingState.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
 import { userService } from '../services/userService.js';
 import { passwordMeetsPolicy, roleLabels, ROLES } from '../utils/rbac.js';
-import { getStoredUsers } from '../utils/users.js';
 
 const blankUser = {
   employeeId: '',
@@ -39,13 +39,22 @@ const blankUser = {
 
 function UserManagement() {
   const { user } = useAuth();
-  const [users, setUsers] = useState(getStoredUsers);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(blankUser);
   const [editingId, setEditingId] = useState('');
   const [error, setError] = useState('');
 
-  const refresh = () => setUsers(getStoredUsers());
+  const refresh = () => {
+    setLoading(true);
+    userService.getAll().then((data) => {
+      setUsers(data || []);
+      setLoading(false);
+    });
+  };
+
+  useEffect(() => { refresh(); }, []);
 
   const openCreate = () => {
     setEditingId('');
@@ -55,7 +64,7 @@ function UserManagement() {
   };
 
   const openEdit = (selectedUser) => {
-    setEditingId(selectedUser.employeeId);
+    setEditingId(selectedUser._id || selectedUser.employeeId);
     setForm({ ...selectedUser, password: selectedUser.password || '' });
     setError('');
     setDialogOpen(true);
@@ -89,6 +98,8 @@ function UserManagement() {
     refresh();
   };
 
+  if (loading) return <LoadingState label="Loading users..." />;
+
   return (
     <Box>
       <SectionHeader
@@ -112,7 +123,7 @@ function UserManagement() {
               </TableHead>
               <TableBody>
                 {users.map((managedUser) => (
-                  <TableRow hover key={managedUser.employeeId}>
+                  <TableRow hover key={managedUser._id || managedUser.employeeId}>
                     <TableCell>{managedUser.employeeId}</TableCell>
                     <TableCell>{managedUser.username}</TableCell>
                     <TableCell>{roleLabels[managedUser.role]}</TableCell>
@@ -123,10 +134,10 @@ function UserManagement() {
                         <IconButton onClick={() => openEdit(managedUser)}><Edit /></IconButton>
                       </Tooltip>
                       <Tooltip title="Disable user">
-                        <IconButton color="warning" onClick={() => disableUser(managedUser.employeeId)}><Block /></IconButton>
+                        <IconButton color="warning" onClick={() => disableUser(managedUser._id || managedUser.employeeId)}><Block /></IconButton>
                       </Tooltip>
                       <Tooltip title="Reset password to Reset@123">
-                        <IconButton color="primary" onClick={() => resetPassword(managedUser.employeeId)}><Key /></IconButton>
+                        <IconButton color="primary" onClick={() => resetPassword(managedUser._id || managedUser.employeeId)}><Key /></IconButton>
                       </Tooltip>
                     </TableCell>
                   </TableRow>

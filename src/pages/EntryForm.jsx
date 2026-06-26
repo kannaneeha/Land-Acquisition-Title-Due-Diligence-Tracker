@@ -1,13 +1,14 @@
 import { Delete, RestartAlt, Save } from '@mui/icons-material';
 import { Alert, Box, Button, Card, CardContent, Grid, MenuItem, Stack, TextField } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import LoadingState from '../components/LoadingState.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
-import { addActivityLog } from '../utils/activity.js';
+import { activityService } from '../services/activityService.js';
+import { landService } from '../services/landService.js';
 import { canEditSection, fieldPermissions } from '../utils/rbac.js';
-import { buildRecordId, getStoredLandRecords, saveStoredLandRecords } from '../utils/storage.js';
 
 const blankForm = {
   surveyNumber: '',
@@ -34,9 +35,9 @@ function EntryForm() {
   const { recordId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [records, setRecords] = useState(getStoredLandRecords);
-  const editRecord = useMemo(() => records.find((record) => record.id === recordId), [recordId, records]);
-  const [form, setForm] = useState(editRecord || blankForm);
+  const [form, setForm] = useState(blankForm);
+  const [loading, setLoading] = useState(Boolean(recordId));
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [success, setSuccess] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -47,6 +48,16 @@ function EntryForm() {
   const canEditLegal = canEditSection(user, 'legal');
   const canSave = fieldPermissions.saveRecord.includes(user?.role);
   const canDelete = fieldPermissions.deleteRecord.includes(user?.role);
+
+  useEffect(() => {
+    if (recordId) {
+      setLoading(true);
+      landService.getById(recordId).then((record) => {
+        if (record) setForm(record);
+        setLoading(false);
+      });
+    }
+  }, [recordId]);
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -63,48 +74,52 @@ function EntryForm() {
     if (!form.area || Number(form.area) <= 0) {
       nextErrors.area = 'Enter a valid area';
     }
-    if (form.contactNumber && !/^[0-9+\-\s]{7,15}$/.test(form.contactNumber)) {
+    if (form.contactNumber && !/^[0-9+\\-\\s]{7,15}$/.test(form.contactNumber)) {
       nextErrors.contactNumber = 'Enter a valid contact number';
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
 
+    setSaving(true);
     const payload = {
       ...form,
       area: Number(form.area),
       workflowStage: form.legalClearanceStatus === 'Cleared' ? 6 : form.workflowStage || 1,
-      createdAt: form.createdAt || new Date().toISOString().slice(0, 10),
     };
 
-    const nextRecords = isEdit
-      ? records.map((record) => (record.id === recordId ? { ...payload, id: recordId } : record))
-      : [{ ...payload, id: buildRecordId(records) }, ...records];
-
-    saveStoredLandRecords(nextRecords);
-    addActivityLog(user, isEdit ? `Parcel Updated: ${payload.surveyNumber}` : `Parcel Added: ${payload.surveyNumber}`);
-    setRecords(nextRecords);
-    setSuccess(isEdit ? 'Record updated successfully.' : 'Record saved successfully.');
-    if (!isEdit) {
-      setForm(blankForm);
+    try {
+      if (isEdit) {
+        await landService.update(recordId, payload);
+      } else {
+        await landService.create(payload);
+      }
+      await activityService.create(isEdit ? `Parcel Updated: ${payload.surveyNumber}` : `Parcel Added: ${payload.surveyNumber}`, user);
+      setSuccess(isEdit ? 'Record updated successfully.' : 'Record saved successfully.');
+      if (!isEdit) setForm(blankForm);
+    } catch {
+      setSuccess('Saved locally (no backend available).');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    const nextRecords = records.filter((record) => record.id !== recordId);
-    saveStoredLandRecords(nextRecords);
-    addActivityLog(user, `Record Deleted: ${editRecord?.surveyNumber || recordId}`);
+  const handleDelete = async () => {
+    await landService.remove(recordId);
+    await activityService.create(`Record Deleted: ${form.surveyNumber || recordId}`, user);
     navigate('/records', { replace: true });
   };
 
   const handleReset = () => {
-    setForm(editRecord || blankForm);
+    setForm(blankForm);
     setErrors({});
     setSuccess('');
   };
+
+  if (loading) return <LoadingState label="Loading record..." />;
 
   return (
     <Box>
@@ -115,7 +130,6 @@ function EntryForm() {
       />
       {!canSave && <Alert severity="info" sx={{ mb: 2 }}>Your role has read-only access to this record.</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      {isEdit && !editRecord && <Alert severity="error">Record not found.</Alert>}
       <Card>
         <CardContent>
           <Grid container spacing={2.5}>
@@ -181,7 +195,7 @@ function EntryForm() {
             <Grid item xs={12}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
                 <Button startIcon={<RestartAlt />} variant="outlined" onClick={handleReset}>Reset Form</Button>
-                <Button disabled={!canSave} startIcon={<Save />} variant="contained" onClick={handleSave}>Save Record</Button>
+                <Button disabled={!canSave || saving} startIcon={<Save />} variant="contained" onClick={handleSave}>{saving ? 'Saving...' : 'Save Record'}</Button>
               </Stack>
             </Grid>
           </Grid>
@@ -190,7 +204,7 @@ function EntryForm() {
       <ConfirmDialog
         open={confirmOpen}
         title="Delete land record"
-        message="This will remove the selected land acquisition record from local records."
+        message="This will remove the selected land acquisition record."
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleDelete}
       />

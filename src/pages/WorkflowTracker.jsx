@@ -1,21 +1,33 @@
 import { Box, Card, CardContent, Grid, LinearProgress, Step, StepLabel, Stepper, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import LoadingState from '../components/LoadingState.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { workflowService } from '../services/workflowService.js';
 import { workflowStages } from '../utils/mockData.js';
-import { getStoredLandRecords } from '../utils/storage.js';
 
 function WorkflowTracker() {
-  const records = getStoredLandRecords();
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    workflowService.getAll().then((data) => {
+      setRecords(data || []);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <LoadingState label="Loading workflow data..." />;
 
   return (
     <Box>
       <SectionHeader title="Workflow Tracker" subtitle="Monitor every parcel from identification through acquisition completion." />
       <Grid container spacing={2.5}>
         {records.map((record) => {
-          const activeStep = Math.max(record.workflowStage - 1, 0);
-          const progress = Math.round((record.workflowStage / workflowStages.length) * 100);
+          const activeStep = Math.max((record.workflowStage || 1) - 1, 0);
+          const progress = Math.round(((record.workflowStage || 1) / workflowStages.length) * 100);
           return (
-            <Grid item xs={12} key={record.id}>
+            <Grid item xs={12} key={record._id || record.id}>
               <Card>
                 <CardContent>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>

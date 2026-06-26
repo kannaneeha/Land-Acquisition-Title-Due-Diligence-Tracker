@@ -24,16 +24,17 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import LoadingState from '../components/LoadingState.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { useAuth } from '../hooks/useAuth.jsx';
+import { activityService } from '../services/activityService.js';
+import { landService } from '../services/landService.js';
 import { ROLES } from '../utils/rbac.js';
-import { addActivityLog } from '../utils/activity.js';
-import { getStoredLandRecords, saveStoredLandRecords } from '../utils/storage.js';
 
 const columns = [
   { key: 'surveyNumber', label: 'Survey Number' },
@@ -48,7 +49,8 @@ const columns = [
 function LandRecords() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [records, setRecords] = useState(getStoredLandRecords);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [orderBy, setOrderBy] = useState('surveyNumber');
@@ -57,6 +59,15 @@ function LandRecords() {
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [viewRecord, setViewRecord] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+
+  const fetchRecords = () => {
+    setLoading(true);
+    landService.getAll().then((data) => {
+      setRecords(data || []);
+    }).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchRecords(); }, []);
 
   const filtered = useMemo(() => {
     const normalized = query.toLowerCase();
@@ -89,16 +100,18 @@ function LandRecords() {
     setOrderBy(key);
   };
 
-  const handleDelete = () => {
-    const nextRecords = records.filter((record) => record.id !== deleteId);
-    saveStoredLandRecords(nextRecords);
-    addActivityLog(user, `Record Deleted: ${deleteId}`);
-    setRecords(nextRecords);
+  const handleDelete = async () => {
+    const record = records.find((r) => r.id === deleteId || r._id === deleteId);
+    await landService.remove(deleteId);
+    await activityService.create(`Record Deleted: ${record?.surveyNumber || deleteId}`, user);
     setDeleteId(null);
+    fetchRecords();
   };
 
   const canEditRecords = [ROLES.ADMIN, ROLES.OFFICER, ROLES.LEGAL].includes(user?.role);
   const canDeleteRecords = user?.role === ROLES.ADMIN;
+
+  if (loading) return <LoadingState label="Loading land records..." />;
 
   return (
     <Box>
@@ -147,7 +160,7 @@ function LandRecords() {
               </TableHead>
               <TableBody>
                 {paginated.map((record) => (
-                  <TableRow hover key={record.id}>
+                  <TableRow hover key={record.id || record._id}>
                     <TableCell>{record.surveyNumber}</TableCell>
                     <TableCell>{record.ownerName}</TableCell>
                     <TableCell>{record.location}</TableCell>
@@ -161,12 +174,12 @@ function LandRecords() {
                       </Tooltip>
                       {canEditRecords && (
                         <Tooltip title="Edit">
-                          <IconButton onClick={() => navigate(`/entry/${record.id}`)}><Edit /></IconButton>
+                          <IconButton onClick={() => navigate(`/entry/${record.id || record._id}`)}><Edit /></IconButton>
                         </Tooltip>
                       )}
                       {canDeleteRecords && (
                         <Tooltip title="Delete">
-                          <IconButton color="error" onClick={() => setDeleteId(record.id)}><Delete /></IconButton>
+                          <IconButton color="error" onClick={() => setDeleteId(record.id || record._id)}><Delete /></IconButton>
                         </Tooltip>
                       )}
                     </TableCell>
@@ -176,7 +189,7 @@ function LandRecords() {
             </Table>
           </TableContainer>
 
-          {filtered.length === 0 && <EmptyState />}
+          {filtered.length === 0 && !loading && <EmptyState />}
           <TablePagination
             component="div"
             count={filtered.length}

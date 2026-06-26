@@ -1,12 +1,25 @@
 import { History } from '@mui/icons-material';
 import { Box, Card, CardContent, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
 import EmptyState from '../components/EmptyState.jsx';
+import LoadingState from '../components/LoadingState.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
-import { getActivityLog } from '../utils/activity.js';
+import { activityService } from '../services/activityService.js';
+ 
 
 function ActivityLog() {
-  const activities = getActivityLog();
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    activityService.getAll().then((data) => {
+      setActivities(data);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <LoadingState label="Loading activity log..." />;
 
   return (
     <Box>
@@ -16,7 +29,7 @@ function ActivityLog() {
           {activities.length === 0 && <EmptyState title="No activity yet" message="Actions will appear here as users work in the tracker." />}
           <Stack spacing={0}>
             {activities.map((activity, index) => (
-              <Box key={activity.id} sx={{ display: 'flex', gap: 2, pb: 2.5, position: 'relative' }}>
+              <Box key={activity.id || activity._id} sx={{ display: 'flex', gap: 2, pb: 2.5, position: 'relative' }}>
                 <Box sx={{ display: 'grid', justifyItems: 'center' }}>
                   <Box sx={{ width: 38, height: 38, borderRadius: '50%', bgcolor: 'primary.light', color: 'primary.main', display: 'grid', placeItems: 'center' }}>
                     <History fontSize="small" />
@@ -29,7 +42,7 @@ function ActivityLog() {
                     <Typography variant="caption" color="text.secondary">{new Date(activity.timestamp).toLocaleString()}</Typography>
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
-                    {activity.userName} | {activity.employeeId}
+                    {activity.userName || activity.employeeId || activity.role}
                   </Typography>
                   <Box sx={{ mt: 1 }}>
                     <StatusBadge label={activity.role} />

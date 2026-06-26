@@ -1,11 +1,14 @@
 import { Download, PictureAsPdf, TableChart } from '@mui/icons-material';
 import { Box, Button, Grid, Stack } from '@mui/material';
+import { useEffect, useState } from 'react';
 import { BarChart, ChartCard, LineChart, PieChart } from '../components/Charts.jsx';
+import LoadingState from '../components/LoadingState.jsx';
 import KpiCard from '../components/KpiCard.jsx';
 import SectionHeader from '../components/SectionHeader.jsx';
+import { activityService } from '../services/activityService.js';
+import { landService } from '../services/landService.js';
+import { reportService } from '../services/reportService.js';
 import { exportRecordsToExcel, exportReportToPdf } from '../utils/exportUtils.js';
-import { getActivityLog } from '../utils/activity.js';
-import { getStoredLandRecords } from '../utils/storage.js';
 
 function groupCount(records, key) {
   return records.reduce((acc, record) => {
@@ -15,8 +18,21 @@ function groupCount(records, key) {
 }
 
 function Reports() {
-  const records = getStoredLandRecords();
-  const activities = getActivityLog();
+  const [records, setRecords] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      landService.getAll(),
+      activityService.getAll(),
+    ]).then(([r, a]) => {
+      setRecords(r || []);
+      setActivities(a || []);
+      setLoading(false);
+    });
+  }, []);
+
   const pendingCases = records.filter((record) => ['Pending', 'In Review', 'Blocked'].includes(record.legalClearanceStatus)).length;
   const acquired = records.filter((record) => record.workflowStage === 6).length;
   const totalArea = records.reduce((sum, record) => sum + Number(record.area), 0).toFixed(1);
@@ -30,9 +46,39 @@ function Reports() {
     value: records.filter((record) => new Date(record.createdAt).getMonth() === index).length,
   }));
   const progressData = records.map((record) => ({
-    label: record.village,
-    value: Math.round((record.workflowStage / 6) * 100),
+    label: record.village || record.location,
+    value: Math.round(((record.workflowStage || 1) / 6) * 100),
   }));
+
+  const handleExportPdf = async () => {
+    try {
+      const blob = await reportService.exportPdf().then((r) => r.data);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      URL.revokeObjectURL(url);
+    } catch {
+      const metrics = [
+        { label: 'Total parcels', value: records.length },
+        { label: 'Total area', value: `${totalArea} acres` },
+        { label: 'Acquisition completed', value: acquired },
+        { label: 'Pending cases', value: pendingCases },
+      ];
+      exportReportToPdf({ title: 'Crownridge LLP Due Diligence Report', metrics, records });
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const blob = await reportService.exportExcel().then((r) => r.data);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'land-records.xls';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch {
+      exportRecordsToExcel(records);
+    }
+  };
 
   const metrics = [
     { label: 'Total parcels', value: records.length },
@@ -41,6 +87,8 @@ function Reports() {
     { label: 'Pending cases', value: pendingCases },
   ];
 
+  if (loading) return <LoadingState label="Loading reports..." />;
+
   return (
     <Box>
       <SectionHeader
@@ -48,8 +96,8 @@ function Reports() {
         subtitle="Executive analytics for acquisition progress, land status, legal clearance, and pending cases."
         action={(
           <Stack direction="row" spacing={1}>
-            <Button startIcon={<PictureAsPdf />} variant="outlined" onClick={() => exportReportToPdf({ title: 'Crownridge LLP Due Diligence Report', metrics, records })}>Export PDF</Button>
-            <Button startIcon={<TableChart />} variant="contained" onClick={() => exportRecordsToExcel(records)}>Export Excel</Button>
+            <Button startIcon={<PictureAsPdf />} variant="outlined" onClick={handleExportPdf}>Export PDF</Button>
+            <Button startIcon={<TableChart />} variant="contained" onClick={handleExportExcel}>Export Excel</Button>
           </Stack>
         )}
       />
