@@ -30,7 +30,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https:", "data:"],
     },
   },
-});
+}));
 app.use(cors());
 app.use(express.json());
 
